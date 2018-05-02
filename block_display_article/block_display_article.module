@@ -1,0 +1,168 @@
+<?php
+/**
+ * @file
+ * By default, this module will list first five nodes of type 'article' with 'Invention' in title in a tabular format sorted by last updated/changed date.
+ * Module custom install file will automatically configure the block to be displayed only on the <frontpage> at 'highlighted' region of block.
+ * Module can be configured to change <search text> , number of record to display and type of node to retrieve.
+ * Module configuration option is at admin>>config>>block_display_article link.
+ * Block position can be configured by using admin>>structure>>blocks>>settings
+ */
+ 
+ 
+/**
+ * Implementation of hook_menu().
+*/
+function block_display_article_menu() {
+
+  $items['admin/config/block_display_article'] = array(
+  'title' => t('Configure Block to Display Articles'),
+  'description' => t('You can configure module configuration setting to change content display settings.'),
+  'page callback' => 'system_admin_menu_block_page',
+  'access arguments' => array('administer site configuration'),
+  'file' => 'system.admin.inc',
+  'file path' => drupal_get_path('module', 'system'),
+  );
+  
+  $items['admin/config/block_display_article/settings'] = array(
+  'title' => t('Configure Parameters to Display Articles within Block'),
+  'description' => t('You can configure search term, # of record and node type for the block to display'),
+  'page callback' => 'drupal_get_form',
+  'page arguments' => array('block_display_article_admin_settings'),
+  'access arguments' => array('administer site configuration'),
+  'type' => MENU_NORMAL_ITEM,
+  );
+  
+  return $items;
+}
+ 
+/**
+ * Implementation of hook_admin_settings().
+*/
+
+function block_display_article_admin_settings() {
+
+
+  $form['block_display_article_searchtext'] = array(
+  '#type' => 'textfield',
+  '#title' => t('Enter text to search in the title'),
+  '#default_value' =>  variable_get('block_display_article_searchtext','Invention'),
+  '#description' => t('All the node beginning with above search text will be shown'),
+  '#required' => TRUE,
+  );
+  
+  $form['block_display_article_recordnum'] = array(
+  '#type' => 'textfield',
+  '#title' => t('Enter number of record to be displayed'),
+  '#attributes' => array(' type' => 'number',),
+  '#default_value' => variable_get('block_display_article_recordnum','5'),
+  '#description' => t('Only selected number of records will be shown'),
+  '#element_validate' => array('element_validate_integer_positive'),
+  '#required' => TRUE,  
+  );
+    
+  $types = node_type_get_types();
+  foreach($types as $node_type) {
+    $nodetypes[$node_type->type] = $node_type->name;
+  }
+
+  $form['block_display_article_nodetype'] = array(
+  '#type' => 'radios',
+  '#title' => t('Selected node type will be shown'),
+  '#options' => $nodetypes,
+  '#default_value' => variable_get('block_display_article_nodetype','article'),
+  '#description' => t('Node type selected will be displayed in the block'),
+  );
+  
+    return system_settings_form($form);
+}
+ 
+ 
+ 
+ 
+
+/**
+ * Implements hook_help().
+ */
+function block_display_article_help($path, $arg) {
+
+  if ($path == 'admin/help#block_display_article') {
+    $output = '<h3>' . t('About') . '</h3>';
+    $output .= '<p>' . t('The module allows the Administrator to display latest types of articles as a block on Drupal site.'). '</p>';
+    return $output;
+  }
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function block_display_article_block_info() {
+  $blocks = array();
+
+  $blocks['block_display_article'] = array(
+    'info' => t('A block to show latest articles'),
+  );
+
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function block_display_article_block_view($block_name = '') {
+  if ($block_name == 'block_display_article') {
+   
+    $search =  variable_get('block_display_article_searchtext', array(''));
+    $recordnum =  variable_get('block_display_article_recordnum', array(''));
+	$nodetype= variable_get('block_display_article_nodetype', array(''));
+	$content = block_display_article_getArticles($nodetype,$search,(int) $recordnum);
+	$block = array(
+      'subject' => t('Show Latest Article Block'),
+      'content' => $content,
+    );
+    return $block;
+  }
+}
+
+/**
+ * Helper function to retrieve the nodes by using db_select() query.
+ */
+
+
+function block_display_article_getArticles($node_type = 'article',$search='Invention',$num_of_record=5)
+{
+	//Based on the node types create a query and then load the node types
+  $query = db_select('node', 'n');
+    
+	//join is used to retrieve the article body/summary with is not available in {node} structure
+  $query->leftJoin('field_data_body', 'd', '(d.entity_id = n.nid AND d.entity_type = :node)', array(':node' => 'node'));
+  $query->fields('n', array('nid', 'title', 'created','type','status','changed'))
+  ->fields('d', array('body_value', 'body_summary', 'body_format'))
+  ->condition('status', 1) //must be published
+  ->condition('type',$node_type) //specific node type default article
+  ->condition('title',db_like($search)."%",'LIKE') //search at the beginning of title field
+  ->orderBy('changed', 'DESC')  // order by the changed/updated date
+  ->range(0,$num_of_record);  // limit the number of record to 5 by default
+
+  $result = $query->execute();
+  
+	//create header of the table with required information///
+  $headers = array(t('Title'), t('Summary'), t('Last Modified'),t('Link'),);
+  $rows[] = array();
+  $output ='';
+	foreach($result as $article){
+		
+		///format the node url to be displayed///
+		$options = array('absolute' => TRUE);
+		$url = url('node/' . $article->nid, $options);
+		$url_format = l('link',$url);
+		
+		$rows[]= array(
+		$article->title,
+		$article->body_value,
+		format_date($article->changed),
+		$url_format,
+		);
+	}
+  $output .= theme('table', array('header' => $headers, 'rows' => $rows));
+  return $output;
+}

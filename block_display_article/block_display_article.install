@@ -1,0 +1,56 @@
+<?php
+
+/**
+ * Helper function to retrieve default display settings of block
+*/
+function block_display_article_defaultsettings()
+{
+          $blocks = array(
+            array(
+              'status' => 1, //enabled by default
+              'weight' => -1, //float at top
+              'region' => 'highlighted', //default region is highlighted
+              'visibility' => 1, 
+              'pages' => "<front>", //only display on the front page////
+              'module' => 'block_display_article',
+              'delta' => 'block_display_article',
+              'theme' => variable_get('theme_default', null), ///default theme
+            )
+          );	
+		  return $blocks;
+
+}
+
+/**
+ * Implementation of hook_enable().
+*/
+function block_display_article_enable() {
+
+  $blocks = block_display_article_defaultsettings();
+    foreach($blocks as $block){
+		db_merge('block')
+              ->key(array(
+                'module'=>$block['module'],
+                'delta'=> $block['delta'],
+                'theme'=> $block['theme']
+              ))
+              ->fields(array(
+                'status' => $block['status'],
+                'weight' => $block['weight'],
+                'region' => $block['region'],
+                'visibility' => $block['visibility'],
+                'pages' => $block['pages'],
+              ))
+              ->execute();
+          }
+}
+
+function block_display_article_uninstall() {
+	variable_del('block_display_article_searchtext');
+	variable_del('block_display_article_recordnum');
+	variable_del('block_display_article_nodetype');
+	cache_clear_all('variables', 'cache_bootstrap');
+
+}
+
+

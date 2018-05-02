@@ -1,0 +1,9 @@
+name = Block Display Articles
+description = This module displays latest articles in a block on Drupal site.
+core = 7.x
+
+files[] = block_display_article.module
+files[] = block_display_article.install
+
+
+configure = admin/config/block_display_article
